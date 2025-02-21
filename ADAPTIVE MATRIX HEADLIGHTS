@@ -1,0 +1,143 @@
+#include <LedControl.h>  // Library for MAX7219 LED Matrix
+
+// Define LED Matrix connections for 4 modules (32x8 matrix)
+#define DIN 11
+#define CS 10
+#define CLK 13
+
+// There are 4 devices (8x8 each) daisy-chained.
+LedControl lc = LedControl(DIN, CLK, CS, 4);
+
+// Define LDR Sensor pins
+#define LDR_LEFT A0
+#define LDR_RIGHT A1
+
+// Define Ultrasonic Sensor pins
+#define TRIG_PIN 6
+#define ECHO_PIN 5
+
+// Define IR Sensor pin
+#define IR_SENSOR 7
+
+// Define Threshold Values
+#define LDR_THRESHOLD 500   // Adjust for ambient light sensitivity
+#define MAX_DISTANCE 30     // Max distance for brightness levels (cm)
+#define MEDIUM_DISTANCE 20  // Medium distance for brightness change (cm)
+#define MIN_DISTANCE 10     // Minimum distance for dimmest brightness (cm)
+
+// Define Brightness Levels
+#define MAX_BRIGHTNESS 15  // Maximum brightness (0-15)
+#define MEDIUM_BRIGHTNESS 8  // Medium brightness level
+#define MIN_BRIGHTNESS 3   // Minimum brightness level
+
+// Function to map ultrasonic distance to brightness
+int mapDistanceToBrightness(long distance) {
+    if (distance > MEDIUM_DISTANCE) {
+        // Far distance: Level 1 (Full brightness)
+        return MAX_BRIGHTNESS;
+    } else if (distance > MIN_DISTANCE) {
+        // Medium distance: Level 2 (Medium brightness)
+        return MEDIUM_BRIGHTNESS;
+    } else {
+        // Close distance: Level 3 (Lowest brightness)
+        return MIN_BRIGHTNESS;
+    }
+}
+
+void setup() {
+    Serial.begin(9600);
+
+    // Initialize all 4 LED matrix modules
+    for (int i = 0; i < 4; i++) {
+        lc.shutdown(i, false);  // Wake up display
+        lc.setIntensity(i, MAX_BRIGHTNESS);  // Start with maximum brightness
+        lc.clearDisplay(i);   // Clear all displays
+    }
+
+    // Sensor Pins setup
+    pinMode(LDR_LEFT, INPUT);
+    pinMode(LDR_RIGHT, INPUT);
+    pinMode(TRIG_PIN, OUTPUT);
+    pinMode(ECHO_PIN, INPUT);
+    pinMode(IR_SENSOR, INPUT);
+}
+
+// Function to read ultrasonic distance
+long getDistance() {
+    digitalWrite(TRIG_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIG_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIG_PIN, LOW);
+    long duration = pulseIn(ECHO_PIN, HIGH);
+    long distance = duration * 0.034 / 2; // Convert time to distance (cm)
+    return distance;
+}
+
+// Function to update LED matrix based on conditions
+void updateMatrix(bool leftDim, bool rightDim, bool blinkWarning, int brightness) {
+    byte matrixPattern[8] = {
+        0b11111111,  // Full high beam
+        0b11111111,
+        0b11111111,
+        0b11111111,
+        0b11111111,
+        0b11111111,
+        0b11111111,
+        0b11111111
+    };
+
+    if (leftDim) {
+        for (int i = 0; i < 8; i++) {
+            matrixPattern[i] &= 0b00001111;  // Dim left side
+        }
+    }
+
+    if (rightDim) {
+        for (int i = 0; i < 8; i++) {
+            matrixPattern[i] &= 0b11110000;  // Dim right side
+        }
+    }
+
+    if (blinkWarning) {
+        for (int i = 0; i < 8; i++) {
+            matrixPattern[i] = (millis() / 500) % 2 == 0 ? 0b10101010 : 0b01010101;  // Blinking pattern
+        }
+    }
+
+    // Update LED Matrix with dynamic brightness
+    for (int i = 0; i < 4; i++) {
+        lc.setIntensity(i, brightness);  // Update brightness based on distance
+    }
+
+    for (int row = 0; row < 8; row++) {
+        for (int module = 0; module < 4; module++) {
+            lc.setRow(module, row, matrixPattern[row]);
+        }
+    }
+}
+
+void loop() {
+    int ldrLeftValue = analogRead(LDR_LEFT);
+    int ldrRightValue = analogRead(LDR_RIGHT);
+    long distance = getDistance();
+    bool irDetected = digitalRead(IR_SENSOR) == LOW;
+
+    bool leftDim = ldrLeftValue < LDR_THRESHOLD;
+    bool rightDim = ldrRightValue < LDR_THRESHOLD;
+    bool blinkWarning = irDetected;
+
+    // Serial Output for Debugging
+    Serial.print("LDR Left: "); Serial.print(ldrLeftValue);
+    Serial.print(" | LDR Right: "); Serial.print(ldrRightValue);
+    Serial.print(" | Distance: "); Serial.print(distance);
+    Serial.print(" | IR Detected: "); Serial.println(irDetected);
+
+    // Calculate brightness based on ultrasonic distance
+    int brightness = mapDistanceToBrightness(distance);
+
+    // Update the LED matrix based on the conditions
+    updateMatrix(leftDim, rightDim, blinkWarning, brightness);
+
+    delay(100);  // Short delay before repeating
+}
