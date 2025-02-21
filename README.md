@@ -1,0 +1,2 @@
+# SMART-WIFI-CAR-WITH-ADAPTIVE-MATRIX-HEADLIGHTS-AND-RFID-ACCESS
+This project combines a **WiFi-controlled car** using **Raspberry Pi**, an **adaptive headlight system** with **Arduino** and **MAX7219 LED matrix**, and an **RFID-based door unlocking system**. It enhances automation, safety, and convenience with obstacle detection, dynamic lighting, and keyless entry for a smarter driving experience.
